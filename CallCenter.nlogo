@@ -122,8 +122,8 @@ to go
   tick
   
   if ticks > 240 [
-    write "n" print normal-satisfaction-list
-    write "v" print vip-satisfaction-list
+    ;write "n" print normal-satisfaction-list
+    ;write "v" print vip-satisfaction-list
     stop]
 
 end
