@@ -22,8 +22,12 @@ globals [
 
   vip-average-waiting-time
   normal-average-waiting-time
-  
+
   client-id-global
+  
+  normal-satisfaction-list
+  vip-satisfaction-list
+  
 
 ]
 
@@ -43,7 +47,7 @@ clients-own [
   patience           ;
   satisfaction       ;
   willing-to-wait    ;
-  
+
   rest-service-time       ;
 
 ]
@@ -52,24 +56,29 @@ clients-own [
 to setup
   ca
 
-  set total-normal-served 0    
-  set total-vip-served 0    
-  set total-served 0 
-  
-  set mean-tolerance 15
+  set total-normal-served 0
+  set total-vip-served 0
+  set total-served 0
+  set total-satisfaction 0
+
+  set mean-tolerance 5
   set mean-patience 1
   set mean-willing-to-wait 10
   set num-of-cur-waiting 0
-  set mean-service-time 10
+  set mean-service-time 20
   set normal-cur-waiting-queue []
   set normal-cur-waiting-queue-with-id []
   set vip-cur-waiting-queue []
   set vip-cur-waiting-queue-with-id []
   
+  set normal-satisfaction-list []
+  set vip-satisfaction-list []
+  
+
   set vip-average-waiting-time 0
   set normal-average-waiting-time 0
 
-  set client-id-global 0   
+  set client-id-global 0
   setup-staff
   reset-ticks
 
@@ -97,19 +106,25 @@ to go
 
   ;write "tick:" print ticks
   ;write "lenght:" print length normal-cur-waiting-queue
+  
   if (length normal-cur-waiting-queue >= 1) or (length vip-cur-waiting-queue >= 1) [
     ;write "normal" print length normal-cur-waiting-queue
     ;write "vip" print length vip-cur-waiting-queue
     ;write "normal queue: " print normal-cur-waiting-queue
     ;write "vip queue: " print vip-cur-waiting-queue
+   
     ask staff [service]]
+ 
   if (length normal-cur-waiting-queue >= 1) or (length vip-cur-waiting-queue >= 1) [
     ask clients [patience-checking]
   ]
 
   tick
-
- 
+  
+  if ticks > 240 [
+    write "n" print normal-satisfaction-list
+    write "v" print vip-satisfaction-list
+    stop]
 
 end
 
@@ -120,18 +135,21 @@ to create-client
 
 
     setxy (min-pxcor ) (min-pycor )
-    set client-id client-id-global 
+    set client-id client-id-global
     set client-id-global client-id-global + 1
     set service-time random-normal mean-service-time (mean-service-time / 4 )
+    set willing-to-wait random-normal mean-willing-to-wait (mean-willing-to-wait / 4 )
 
     ifelse random 100 < ratio-of-vips [
       set is-vip true
+      
       set vip-cur-waiting-queue lput service-time vip-cur-waiting-queue
       set vip-cur-waiting-queue-with-id  lput client-id vip-cur-waiting-queue-with-id
 
     ]
     [
       set is-vip false
+  
       set normal-cur-waiting-queue lput service-time normal-cur-waiting-queue
       set normal-cur-waiting-queue-with-id  lput client-id normal-cur-waiting-queue-with-id
     ]
@@ -144,9 +162,29 @@ to create-client
 
     set num-of-cur-waiting num-of-cur-waiting + 1
     set last-call-in ticks
-   
+    
+    ifelse is-vip = false
+    [if willing-to-wait < length normal-cur-waiting-queue [
+      
+      let position-in-queue position client-id normal-cur-waiting-queue-with-id
+      set normal-cur-waiting-queue remove-item position-in-queue normal-cur-waiting-queue
+      set normal-cur-waiting-queue-with-id remove-item position-in-queue normal-cur-waiting-queue-with-id
+      set total-missed total-missed + 1
 
+      die ]
+    ]
+  
+    [if willing-to-wait < length vip-cur-waiting-queue [
+      let position-in-queue position client-id vip-cur-waiting-queue-with-id
+      set vip-cur-waiting-queue remove-item position-in-queue vip-cur-waiting-queue
+      set vip-cur-waiting-queue-with-id remove-item position-in-queue vip-cur-waiting-queue-with-id
+      
+      set total-missed total-missed + 1
+      die
+      ]
+    ]
   ]
+  
 
 end
 
@@ -161,19 +199,24 @@ to service
       ;write "q" print normal-cur-waiting-queue
       ;write "qid" print normal-cur-waiting-queue-with-id
       set normal-cur-waiting-queue remove-item 0 normal-cur-waiting-queue    ;serve the first client in the queue
-      
-      
-        
+
+
+
       ask clients with [client-id = first normal-cur-waiting-queue-with-id][
-          let normal-total-waiting-time normal-average-waiting-time * total-normal-served 
-          set normal-average-waiting-time normal-average-waiting-time * total-normal-served 
-          set total-normal-served total-normal-served + 1 
+          let normal-total-waiting-time normal-average-waiting-time * total-normal-served
+          set normal-average-waiting-time normal-average-waiting-time * total-normal-served
+          set total-normal-served total-normal-served + 1
           set waiting-time (ticks - last-call-in)
-          
-          
-          
+
+          set satisfaction precision (patience * (50 - 2 * (waiting-time * waiting-time))) 0
+          set normal-satisfaction-list lput satisfaction normal-satisfaction-list
+          ;write "satisfaction" print  precision satisfaction 2
+          ;write "w" print waiting-time
+          ;write "p" print patience
+          set total-satisfaction (total-satisfaction * (total-served + total-missed) + satisfaction)/(total-missed + total-served + 1) 
+     
           die]
-      
+
       set normal-cur-waiting-queue-with-id remove-item 0 normal-cur-waiting-queue-with-id
       ;write "staff new:" print rest-service-time
     ]
@@ -181,71 +224,92 @@ to service
    ]
     [set rest-service-time first vip-cur-waiting-queue
      ask clients with [client-id = first vip-cur-waiting-queue-with-id][
-        set total-vip-served total-vip-served + 1 
+        set total-vip-served total-vip-served + 1
+
+        set satisfaction precision (patience * (50 - 2 * (waiting-time * waiting-time))) 0
+        set vip-satisfaction-list lput satisfaction vip-satisfaction-list
+        set total-satisfaction (total-satisfaction * (total-served + total-missed) + satisfaction)/(total-missed + total-served + 1) 
+     
+        ;write "satisfaction" print  precision satisfaction 2
+        ;write "w" print waiting-time
+        ;write "p" print patience
+
         die]
      set vip-cur-waiting-queue remove-item 0 vip-cur-waiting-queue
      set vip-cur-waiting-queue-with-id remove-item 0 vip-cur-waiting-queue-with-id
-     
+
     ]
-    
+
     set num-of-cur-waiting num-of-cur-waiting - 1
     set total-served total-served + 1
   ]
 
   [set rest-service-time rest-service-time - 1]
-
+ 
+  
+ 
 end
+
+
 
 
 to patience-checking
   ;write "ticks" print ticks
-  
-  set waiting-time (ticks - last-call-in) 
-  
-  if waiting-time > tolerance  ;the client have no more tolerance to wait in the queue - leave the queue 
- 
+
+  set waiting-time (ticks - last-call-in)
+
+  if waiting-time > tolerance  ;the client have no more tolerance to wait in the queue - leave the queue
+
   [
     ;write "w" print waiting-time
     ;write "p" print patience
     ;write "c" print client-id
-    ifelse is-vip = false 
+    ifelse is-vip = false
     [
       let position-in-queue position client-id normal-cur-waiting-queue-with-id
-      
-      
-      
+
       ; client 离开时的满意度
       ;write "w" print waiting-time
       ;write "p" print patience
       ;write "c" print client-id
-      set satisfaction (waiting-time * waiting-time) * patience
-      write "satisfaction" print  precision satisfaction 2 
+      set satisfaction precision (patience * (50 - 2 * (waiting-time * waiting-time))) 0
+      if satisfaction = 0[
+        print patience
+        print waiting-time
+      ]
+      set normal-satisfaction-list lput satisfaction normal-satisfaction-list
      
+      ;write "satisfaction" print  precision satisfaction 2
       
       
-      
-      
+
       set normal-cur-waiting-queue remove-item position-in-queue normal-cur-waiting-queue
       set normal-cur-waiting-queue-with-id remove-item position-in-queue normal-cur-waiting-queue-with-id
       set total-missed total-missed + 1
+
+      set total-satisfaction (total-satisfaction * (total-served + total-missed) + satisfaction)/(total-missed + total-served) 
       
-      
+
       die]
     [
       let position-in-queue position client-id vip-cur-waiting-queue-with-id
-      
+
       set vip-cur-waiting-queue remove-item position-in-queue vip-cur-waiting-queue
       set vip-cur-waiting-queue-with-id remove-item position-in-queue vip-cur-waiting-queue-with-id
+      set vip-satisfaction-list lput satisfaction vip-satisfaction-list
+    
       set total-missed total-missed + 1
-      
+      set total-satisfaction (total-satisfaction * (total-served + total-missed) + satisfaction)/(total-missed + total-served) 
+     
+
       die
     ]
-   
+
   ]
-  
-  
- 
-  
-  
+
+
+
+
+
 
 end
