@@ -162,6 +162,7 @@ to create-client
 
     set num-of-cur-waiting num-of-cur-waiting + 1
     set last-call-in ticks
+    set waiting-time 0
     
     ifelse is-vip = false
     [if willing-to-wait < length normal-cur-waiting-queue [
@@ -206,14 +207,14 @@ to service
           let normal-total-waiting-time normal-average-waiting-time * total-normal-served
           set normal-average-waiting-time normal-average-waiting-time * total-normal-served
           set total-normal-served total-normal-served + 1
-          set waiting-time (ticks - last-call-in)
+          ;set waiting-time waiting-time + 1
 
           set satisfaction precision (patience * (50 - 2 * (waiting-time * waiting-time))) 0
           set normal-satisfaction-list lput satisfaction normal-satisfaction-list
           ;write "satisfaction" print  precision satisfaction 2
           ;write "w" print waiting-time
           ;write "p" print patience
-          set total-satisfaction (total-satisfaction * (total-served + total-missed) + satisfaction)/(total-missed + total-served + 1) 
+          set total-satisfaction ((total-satisfaction * (total-served + total-missed)) + satisfaction)/(total-missed + total-served + 1) 
      
           die]
 
@@ -228,7 +229,7 @@ to service
 
         set satisfaction precision (patience * (50 - 2 * (waiting-time * waiting-time))) 0
         set vip-satisfaction-list lput satisfaction vip-satisfaction-list
-        set total-satisfaction (total-satisfaction * (total-served + total-missed) + satisfaction)/(total-missed + total-served + 1) 
+        set total-satisfaction ((total-satisfaction * (total-served + total-missed)) + satisfaction)/(total-missed + total-served + 1) 
      
         ;write "satisfaction" print  precision satisfaction 2
         ;write "w" print waiting-time
@@ -256,7 +257,8 @@ end
 to patience-checking
   ;write "ticks" print ticks
 
-  set waiting-time (ticks - last-call-in)
+ 
+
 
   if waiting-time > tolerance  ;the client have no more tolerance to wait in the queue - leave the queue
 
@@ -287,9 +289,7 @@ to patience-checking
       set normal-cur-waiting-queue-with-id remove-item position-in-queue normal-cur-waiting-queue-with-id
       set total-missed total-missed + 1
 
-      set total-satisfaction (total-satisfaction * (total-served + total-missed) + satisfaction)/(total-missed + total-served) 
-      
-
+      set total-satisfaction ((total-satisfaction * (total-served + total-missed)) + satisfaction)/(total-missed + total-served) 
       die]
     [
       let position-in-queue position client-id vip-cur-waiting-queue-with-id
@@ -299,13 +299,15 @@ to patience-checking
       set vip-satisfaction-list lput satisfaction vip-satisfaction-list
     
       set total-missed total-missed + 1
-      set total-satisfaction (total-satisfaction * (total-served + total-missed) + satisfaction)/(total-missed + total-served) 
+      set total-satisfaction ((total-satisfaction * (total-served + total-missed)) + satisfaction)/(total-missed + total-served) 
      
 
       die
     ]
+    
 
   ]
+   set waiting-time waiting-time + 1
 
 
 
